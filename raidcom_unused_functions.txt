@@ -1,0 +1,209 @@
+#!/usr/bin/env python3
+import subprocess
+import re
+import pandas as pd
+import os
+from openpyxl import load_workbook
+
+
+
+
+
+def host_grp_filter(host_grp_array_of_arrays, host_grp_filter_string):
+        array_of_host_grps = []
+        for host_grp in host_grp_array_of_arrays:
+                if host_grp_filter_string in host_grp[2]:
+                        array_of_host_grps.append(host_grp)
+        return array_of_host_grps
+
+
+def get_luns_of_a_host_grp_by_filter(horcm_instance, host_grp_filter_string):
+        dict_of_luns = {}
+        host_grp_array_of_arrays = create_host_grp_array_of_arrays(horcm_instance)
+        host_grp_filter_apply = host_grp_filter(host_grp_array_of_arrays, host_grp_filter_string)
+        for host_grp in host_grp_filter_apply:
+                get_luns_of_a_host_grp_by_name_output = get_luns_of_a_host_grp_by_name(host_grp[0], host_grp[2], horcm_instance)
+                print("checking: raidcom get lun -port " + host_grp[0] + " " + host_grp[2] + " -fx -I" + horcm_instance)
+                if not dict_of_luns:
+                        dict_of_luns.update(get_luns_of_a_host_grp_by_name_output)
+                        print ("first run")
+                elif dict_of_luns == get_luns_of_a_host_grp_by_name_output:
+                        dict_of_luns.update(get_luns_of_a_host_grp_by_name_output)
+                        print("another run - merging dict")
+                else:
+                        print ("error")
+                        diff1 = set(dict_of_luns) - set(get_luns_of_a_host_grp_by_name_output)
+                        diff2 = set(get_luns_of_a_host_grp_by_name_output) - set(dict_of_luns)
+                        print("diff between dicts: ")
+                        print(diff1)
+                        print("diff between dicts: ")
+                        print(diff2)
+        return dict_of_luns
+
+def get_ldev_info(horcm_instance, ldev_id):
+        dict_of_ldev = {}
+        get_ldev = subprocess.check_output(["raidcom", "get", "ldev", "-ldev_id", ldev_id, "-fx", "-I" + horcm_instance])
+        get_ldev = get_ldev.splitlines()
+        for line in get_ldev:
+                line = line.decode()
+                if not "Serial#" in line:
+                        line=line.split(":")
+                        ldev_key = line[0].strip()
+                        ldev_value = line[1:]
+                        string_ldev_value = ":".join(str(x) for x in ldev_value)
+                        dict_of_ldev[ldev_key] = string_ldev_value
+        return dict_of_ldev
+
+def check_if_ldev_id_is_free(horcm_instance, ldev_id):
+        get_ldev_info_from_id_and_isnt = get_ldev_info(horcm_instance, ldev_id)
+        VOL_TYPE = get_ldev_info_from_id_and_isnt.get("VOL_TYPE")
+        # print (VOL_TYPE)
+        if VOL_TYPE.strip() == "NOT DEFINED":
+                return True
+        else:
+                return False
+
+def get_mus_by_ldev_id(horcm_instance, ldev_id):
+        array_of_mus = []
+        get_ldev_info_test = get_ldev_info(horcm_instance, ldev_id)
+        port_host_grp = get_ldev_info_test['PORTs'].split()[0].strip()
+        # print(port_host_grp)
+        lu = get_ldev_info_test['PORTs'].split()[1].strip()
+        #print(lu)
+        get_ldev_mus = subprocess.check_output(["raidscan", "-IH" + horcm_instance , "-p", port_host_grp, "-l", lu, "-m", "all", "-fx", "-CLI"])
+        # get_ldev_mus = get_ldev_mus.splitlines()[1:]
+        get_ldev_mus = get_ldev_mus.splitlines()
+        del get_ldev_mus[0]
+        # get_ldev_mus.pop(0)
+        mu_id = 0
+        for mu in get_ldev_mus:
+                mu = mu.decode()
+                mu = mu.split()
+                mu.insert(0, mu_id)
+                array_of_mus.append(mu)
+                mu_id = mu_id + 1
+        return array_of_mus
+
+def get_ldev_list_mapped(horcm_instance):
+        array_of_ldevs = []
+        ldevs = subprocess.check_output(["raidcom", "get", "ldev", "-ldev_list", "mapped", "-fx", "-key", "front_end", "-I" + horcm_instance])
+        ldevs = ldevs.splitlines()
+        for ldev in ldevs:
+                ldev = ldev.decode()
+                if not "VOL_TYPE" in ldev:
+                        ldev=ldev.split()
+                        array_of_ldevs.append(ldev)
+        return array_of_ldevs
+
+def output_horcm_text_data(horcm_instance):
+        get_ldev_list_mapped_output = []
+        get_ldev_list_mapped_output = get_ldev_list_mapped(horcm_instance)
+        print (get_ldev_list_mapped_output)
+        for i in get_ldev_list_mapped_output:
+                if re.search(r'HORC', i[7]) or re.search(r'GAD', i[7]):
+                        chars_ldev = [char for char in i[1]]
+                        if len(chars_ldev) == 1:
+                                chars_ldev.insert(0, "0")
+                                chars_ldev.insert(0, "0")
+                                chars_ldev.insert(0, "0")
+                        if len(chars_ldev) == 2:
+                                chars_ldev.insert(0, "0")
+                                chars_ldev.insert(0, "0")
+                        if len(chars_ldev) == 3:
+                                chars_ldev.insert(0, "0")
+                        chars_ldev.insert(2, ":")
+                        text_ldev = ''.join(chars_ldev)
+                        # print(chars_ldev, len(chars_ldev))
+                        print("discover" + '\t' + "discover_" + i[1] + "_0" + '\t' + i[0] + '\t' + text_ldev + '\t' + "0")
+                        print("discover" + '\t' + "discover_" + i[1] + "_h1" + '\t' + i[0] + '\t' + text_ldev + '\t' + "h1")
+                        print("discover" + '\t' + "discover_" + i[1] + "_h2" + '\t' + i[0] + '\t' + text_ldev + '\t' + "h2")
+                        print("discover" + '\t' + "discover_" + i[1] + "_h3" + '\t' + i[0] + '\t' + text_ldev + '\t' + "h3")
+
+
+
+# host_grp_array_of_arrays = create_host_grp_array_of_arrays("0")
+# for i in host_grp_array_of_arrays:
+#         print(i)
+
+# host_grp_filter_apply = host_grp_filter(host_grp_array_of_arrays,"Yaffo")
+# for i in host_grp_filter_apply:
+#         print(i)
+
+# for host_grp in host_grp_filter_apply:
+#         get_hba_wwns_of_a_host_grp_by_name_test = get_hba_wwns_of_a_host_grp_by_name(host_grp[0], host_grp[2], "0")
+#         for i in get_hba_wwns_of_a_host_grp_by_name_test:
+#                 print (i)
+
+# get_hba_wwns_of_a_host_grp_by_name_test = get_hba_wwns_of_a_host_grp_by_name("CL5-A", "Yaffo_LAN", "0")
+# for i in get_hba_wwns_of_a_host_grp_by_name_test:
+#         print (i)
+
+# test_get_luns_of_a_host_grp_by_name = get_luns_of_a_host_grp_by_name("CL5-A", "Yaffo_LAN", "0")
+# print(test_get_luns_of_a_host_grp_by_name)
+
+# test_get_luns_of_a_host_grp_by_filter = get_luns_of_a_host_grp_by_filter("0", "Yaffo_LAN")
+# print(test_get_luns_of_a_host_grp_by_filter)
+
+# for ldev, lun in test_get_luns_of_a_host_grp_by_filter.items():
+#         print("LDEV = " + ldev + " ; LUN = " +  lun)
+
+# get_ldev_info_test = get_ldev_info("0", "0xcd")
+# print(get_ldev_info_test)
+# for x, y in get_ldev_info_test.items():
+#         print(x + " : " + y)
+
+# check_if_ldev_id_is_free_test = check_if_ldev_id_is_free("1", "0xff")
+# print (check_if_ldev_id_is_free_test)
+
+
+# target_host_grps_all_1 = create_host_grp_array_of_arrays("1")
+# target_host_grps_all_2 = create_host_grp_array_of_arrays("2")
+# target_host_grps_1 = host_grp_filter(target_host_grps_all_1,"IDB_CLU_1")
+# target_host_grps_2 = host_grp_filter(target_host_grps_all_2,"IDB_CLU_1")
+# luns_of_a_host_grp_filter = get_luns_of_a_host_grp_by_filter("0", "Yaffo_DMZ")
+# print(luns_of_a_host_grp_filter)
+# for ldev, lun in luns_of_a_host_grp_filter.items():
+#         print("echo LDEV = " + ldev + " : LUN = " +  lun)
+#         # check if ldev is free on destination
+#         check_if_ldev_id_is_free_test_1 = check_if_ldev_id_is_free("1", ldev)
+#         check_if_ldev_id_is_free_test_2 = check_if_ldev_id_is_free("2", ldev)
+#         # print(check_if_ldev_id_is_free_test_1)
+#         # print(check_if_ldev_id_is_free_test_2)
+#         if check_if_ldev_id_is_free_test_1 and check_if_ldev_id_is_free_test_2:
+#                 print("raidcom add ldev -ldev_id " + ldev + " -pool 0 -capacity " + get_ldev_info("0", ldev)['VOL_Capacity(BLK)'].strip() + " -I311")
+#                 print("raidcom add ldev -ldev_id " + ldev + " -pool 0 -capacity " + get_ldev_info("0", ldev)['VOL_Capacity(BLK)'].strip() + " -I491")
+#                 print("raidcom modify -ldev_id " + ldev + " -ldev_name xxxxxx -I311")
+#                 print("raidcom modify -ldev_id " + ldev + " -ldev_name xxxxxx -I491")
+#                 print("raidcom unmap resource -ldev_id " + ldev + " -virtual_ldev_id " + ldev + " -I311")
+#                 print("raidcom unmap resource -ldev_id " + ldev + " -virtual_ldev_id " + ldev + " -I491")
+#                 print("raidcom add resource -ldev_id " + ldev + " -resource_name O5600GAD_PHYS -I311")
+#                 print("raidcom add resource -ldev_id " + ldev + " -resource_name O5600GAD_PHYS -I491")
+#                 print("raidcom map resource -ldev_id " + ldev + " -virtual_ldev_id reserve -I311")
+#                 print("raidcom map resource -ldev_id " + ldev + " -virtual_ldev_id reserve -I491")
+#                 for host_grp in target_host_grps_1:
+#                         print("raidcom add lun -port " + host_grp[0] + " " + host_grp[2] + " -ldev_id " + ldev + " -lun_id " + lun + " -I311")
+#                 for host_grp in target_host_grps_2:
+#                         print("raidcom add lun -port " + host_grp[0] + " " + host_grp[2] + " -ldev_id " + ldev + " -lun_id " + lun + " -I491")
+#         else:
+#                 print("echo Error : LDEV ID " + ldev + " is NOT free on dest" )
+#
+
+
+# get_mus_by_ldev_id_test = get_mus_by_ldev_id("1", "0x26a")
+# for i in get_mus_by_ldev_id_test:
+#         print(i)
+
+
+# get_ldev_list_mapped_test = get_ldev_list_mapped("1")
+# for i in get_ldev_list_mapped_test:
+#         if re.search(r'HORC', i[7]):
+#                 get_mus_by_ldev_id_test = get_mus_by_ldev_id("1", "0x" + i[1])
+#                 for j in get_mus_by_ldev_id_test:
+#                         print(j)
+
+# output_horcm_text_data_test = output_horcm_text_data("1")
+
+
+
+
+
