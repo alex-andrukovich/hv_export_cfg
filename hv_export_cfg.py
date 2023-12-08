@@ -383,6 +383,23 @@ def discover_replication_local(horcm_instance):
     array_of_mus[0].append("#")
     return array_of_mus
 
+def get_rcu(horcm_instance):
+    array_of_rcu = []
+    get_rcus = subprocess.check_output(
+        ["raidcom", "get", "rcu", "-fx", "-I" + horcm_instance])
+    get_rcus = get_rcus.decode().splitlines()
+    for line in get_rcus[1:]:
+        line = line.split()
+        get_rcu = subprocess.check_output(["raidcom", "get", "rcu", "-fx", "-cu_free", line[0], line[1], line[2], "-I" + horcm_instance])
+        rcu = get_rcu.decode().splitlines()
+        for i in rcu:
+            i = i.splitlines()
+            for j in i:
+                j = j.split()
+                array_of_rcu.append(j[0:12])
+    print (array_of_rcu)
+    return array_of_rcu
+
 def get_license(horcm_instance):
     array_of_lic = []
     lic = subprocess.check_output(
@@ -431,6 +448,41 @@ def get_quorum(horcm_instance):
     # print (array_of_quorum)
     return dict_of_dict_of_quorum
 
+def get_jnl(horcm_instance):
+    array_of_jnl = []
+    get_jnls = subprocess.check_output(["raidcom", "get", "journal", "-fx", "-I" + horcm_instance])
+    get_jnls = get_jnls.decode().splitlines()
+    for jnl in get_jnls:
+        jnl = jnl.split()
+        array_of_jnl.append(jnl)
+    return array_of_jnl
+
+def get_jnl_mus(horcm_instance):
+    array_of_jnl = []
+    get_jnls = subprocess.check_output(["raidcom", "get", "journal", "-fx", "-key", "opt", "-I" + horcm_instance])
+    get_jnls = get_jnls.decode().splitlines()
+    for jnl in get_jnls:
+        jnl = jnl.split()
+        array_of_jnl.append(jnl)
+    return array_of_jnl
+
+def get_snapshot(horcm_instance):
+    array_of_snap = []
+    get_snaps = subprocess.check_output(["raidcom", "get", "snapshot", "-fx", "-I" + horcm_instance])
+    get_snaps = get_snaps.decode().splitlines()
+    for line in get_snaps[1:]:
+        line = line.split()
+        get_snap_grp = subprocess.check_output(["raidcom", "get", "snapshot", "-fx", "-format_time", "-snapshotgroup", line[0], "-I" + horcm_instance])
+        snap = get_snap_grp.decode().splitlines()
+        columns = snap[0].split()
+        for i in snap[1:]:
+            i = i.splitlines()
+            for j in i:
+                j = j.split()
+                array_of_snap.append(j)
+    array_of_snap[:0] = [columns]
+    return array_of_snap
+
 horcm_instance = "666"
 storage_ip = "10.0.0.118"
 username = "maintenance"
@@ -441,7 +493,11 @@ raidcom_login(horcm_instance, username, password)
 file = init_excel_file(horcm_instance)
 ##
 
-add_sheet_to_excel(get_license(horcm_instance), file, "License", False)
+add_sheet_to_excel(get_snapshot(horcm_instance), file, "Snapshots", False)
+add_sheet_to_excel(get_jnl(horcm_instance), file, "Journals", False)
+add_sheet_to_excel(get_jnl_mus(horcm_instance), file, "Journal_MUs", False)
+add_sheet_to_excel(get_rcu(horcm_instance), file, "RCUs", False)
+add_sheet_to_excel(get_license(horcm_instance), file, "Licenses", False)
 add_sheet_to_excel(get_pool(horcm_instance), file, "Pools", False)
 add_sheet_to_excel(get_quorum(horcm_instance), file, "Quorum", True)
 add_sheet_to_excel(get_port(horcm_instance), file, "Ports", True)
