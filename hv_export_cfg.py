@@ -481,7 +481,6 @@ def get_snapshot(horcm_instance):
                 j = j.split()
                 array_of_snap.append(j)
     array_of_snap[:0] = [columns]
-    print (array_of_snap)
     return array_of_snap
 
 horcm_instance = "666"
