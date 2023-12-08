@@ -5,34 +5,73 @@ import pandas as pd
 import os
 import numpy as np
 from openpyxl import load_workbook
+import logging
+import traceback
+import time
 
 
+# Create a custom logger
+logger = logging.getLogger("logger")
+# Set the level of this logger. INFO means that it will handle all messages with a level of INFO and above
+logger.setLevel(logging.DEBUG)
+# Create handlers
+c_handler = logging.StreamHandler()
+f_handler = logging.FileHandler('hv_export_cfg.log')
+c_handler.setLevel(logging.DEBUG)
+f_handler.setLevel(logging.DEBUG)
+# Create formatters and add it to handlers
+c_format = logging.Formatter('%(asctime)s - %(funcName)s - %(levelname)s - %(message)s')
+f_format = logging.Formatter('%(asctime)s - %(funcName)s - %(levelname)s - %(message)s')
+c_handler.setFormatter(c_format)
+f_handler.setFormatter(f_format)
+# Add handlers to the logger
+logger.addHandler(c_handler)
+logger.addHandler(f_handler)
 
 def get_home_path():
+    logger.info("Function execution started")
+    start_time = time.time()
     homedrive = os.environ.get('HOMEDRIVE')
     homepath = os.environ.get('HOMEPATH')
     full_homepath = homedrive + homepath
+    # logger.info("using " + full_homepath + "as the home path")
+    logger.info("queried for home directory, returned: " + full_homepath + " horcmXXX.conf and Excel files will be created here")
+    end_time = time.time()
+    execution_time = end_time - start_time
+    logger.info(f"The function took {execution_time} seconds to execute.")
     return full_homepath
 
 def init_excel_file(horcm_instance):
+    logger.info("Function execution started")
+    start_time = time.time()
     get_system = subprocess.check_output(["raidcom", "get", "system", "-fx", "-I" + horcm_instance]).decode().splitlines()
     get_resource = subprocess.check_output(["raidcom", "get", "resource", "-fx", "-key", "opt", "-I" + horcm_instance]).decode().splitlines()
     get_system_opt = subprocess.check_output(["raidcom", "get", "system_opt", "-fx", "-I" + horcm_instance]).decode().splitlines()
     get_system_opt_som = subprocess.check_output(["raidcom", "get", "system_opt", "-key", "mode", "-lpr", "system", "-I" + horcm_instance]).decode().splitlines()
     serial = get_system[0].split(":")[1].strip()
-    init = get_system + ['\n'] + get_resource + ['\n'] + get_system_opt + ['\n']  + get_system_opt_som
+    init = get_system + ['\n'] + get_resource + ['\n'] + get_system_opt + ['\n'] + get_system_opt_som
     init_df = pd.DataFrame(init)
     excel_file_path = get_home_path() + "\\" + serial + "_cfg_export.xlsx"
     init_df.to_excel(excel_file_path, header=False, index=False, sheet_name='Summary_' + serial)
+    end_time = time.time()
+    execution_time = end_time - start_time
+    logger.info(f"The function took {execution_time} seconds to execute.")
     return excel_file_path
 
 def create_vsm_dict(horcm_instance):
+    logger.info("Function execution started")
+    start_time = time.time()
     vsm_dict = {}
     get_resource = subprocess.check_output(["raidcom", "get", "resource", "-fx", "-key", "opt", "-I" + horcm_instance]).decode().splitlines()
     for vsm in get_resource[1:]:
         vsm_dict[vsm.split()[1].strip()] = vsm.split()[0].strip()
+    end_time = time.time()
+    execution_time = end_time - start_time
+    logger.info(f"The function took {execution_time} seconds to execute.")
     return vsm_dict
 def create_horcm_file(horcm_instance, path, storage_ip):
+        logger.info("Function execution started")
+        start_time = time.time()
         horcm_file_full_path = path + "\\" + "horcm" + horcm_instance + ".conf"
         with open(horcm_file_full_path, 'w') as horcm_file:
                 horcm_file.write("HORCM_MON" + '\n')
@@ -41,26 +80,45 @@ def create_horcm_file(horcm_instance, path, storage_ip):
                 horcm_file.write("HORCM_CMD" + '\n')
                 horcm_file.write("#dev_name" + '\t' + "dev_name" + '\t' + "dev_name)" + '\t' + "dev_name" + '\n')
                 horcm_file.write("\\\\.\\IPCMD-" + storage_ip + "-31001" + '\n')
+        end_time = time.time()
+        execution_time = end_time - start_time
+        logger.info(f"The function took {execution_time} seconds to execute.")
 
 def start_horcm_instance(horcm_instance, path):
+        logger.info("Function execution started")
+        start_time = time.time()
         horcm_file_full_path = path + "\\" + "horcm" + horcm_instance + ".conf"
         os.environ['HORCM_CONF'] = horcm_file_full_path
         os.environ['HORCMINST'] = horcm_instance
         os.environ['HORCM_EVERYCLI'] = "1"
         subprocess.run(["horcmstart"])
-
+        end_time = time.time()
+        execution_time = end_time - start_time
+        logger.info(f"The function took {execution_time} seconds to execute.")
 
 def shutdown_horcm_instance(horcm_instance, path):
+    logger.info("Function execution started")
+    start_time = time.time()
     horcm_file_full_path = path + "\\" + "horcm" + horcm_instance + ".conf"
     os.environ['HORCM_CONF'] = horcm_file_full_path
     os.environ['HORCMINST'] = horcm_instance
     os.environ['HORCM_EVERYCLI'] = "1"
     subprocess.run(["horcmshutdown"])
+    end_time = time.time()
+    execution_time = end_time - start_time
+    logger.info(f"The function took {execution_time} seconds to execute.")
 
 def raidcom_login(horcm_instance, username, password):
+        logger.info("Function execution started")
+        start_time = time.time()
         subprocess.run(["raidcom", "-login", username, password, "-I"+horcm_instance])
+        end_time = time.time()
+        execution_time = end_time - start_time
+        logger.info(f"The function took {execution_time} seconds to execute.")
 
 def add_sheet_to_excel(data, excel_file_path ,sheet_name, transpose):
+    logger.info("Function execution started")
+    start_time = time.time()
     data_df = pd.DataFrame(data)
     if transpose:
         data_df = data_df.transpose()
@@ -69,15 +127,19 @@ def add_sheet_to_excel(data, excel_file_path ,sheet_name, transpose):
         try:
             numpy_data = np.array(data)
             data_df = pd.DataFrame(numpy_data[1:], columns=numpy_data[0])
-        except:
-            print ("err")
+        except Exception as e:
+            logger.warning("numpy_data error", exc_info=True)
     with pd.ExcelWriter(excel_file_path, mode='a') as writer:
             data_df.to_excel(writer, sheet_name=sheet_name,  freeze_panes=(1, 0), index=False)
-
+    end_time = time.time()
+    execution_time = end_time - start_time
+    logger.info(f"The function took {execution_time} seconds to execute.")
 
 
 
 def get_ldev_list_mapped(horcm_instance):
+        logger.info("Function execution started")
+        start_time = time.time()
         array_of_ldevs = []
         ldevs = subprocess.check_output(
             ["raidcom", "get", "ldev", "-ldev_list", "mapped", "-fx", "-key", "front_end", "-I" + horcm_instance])
@@ -87,8 +149,13 @@ def get_ldev_list_mapped(horcm_instance):
             if not "VOL_TYPE" in ldev:
                 ldev = ldev.split()
                 array_of_ldevs.append(ldev)
+        end_time = time.time()
+        execution_time = end_time - start_time
+        logger.info(f"The function took {execution_time} seconds to execute.")
         return array_of_ldevs
 def get_ldev_list_defailed_by_type(horcm_instance, type):
+        logger.info("Function execution started")
+        start_time = time.time()
         vsm_dict = create_vsm_dict(horcm_instance)
         ldev_dict = {}
         ldev_dict_of_dict = {}
@@ -101,12 +168,10 @@ def get_ldev_list_defailed_by_type(horcm_instance, type):
             ldev_details_list = ldev.splitlines()
             main_key = ldev_details_list[1].split(":")[1]
             main_key = main_key.strip()
-            # print(main_key)
             for line in ldev_details_list:
                 l = line.split(":")
                 value = ''.join(l[1:])
                 key = l[0]
-                # print(key + ":" + value)
                 if not re.search("VIR_LDEV", value.strip()):
                     ldev_dict[key.strip()] = value.strip()
                 else:
@@ -115,14 +180,17 @@ def get_ldev_list_defailed_by_type(horcm_instance, type):
                 if re.search("RSGID", key.strip()):
                     ldev_dict[key.strip()] = value.strip()
                     ldev_dict['RSGID_NAME'] = vsm_dict[value.strip()]
-                # print (ldev_dict)
             ldev_dict_of_dict[main_key] = ldev_dict
             ldev_dict = {}
-        # print (ldev_dict_of_dict)
+        end_time = time.time()
+        execution_time = end_time - start_time
+        logger.info(f"The function took {execution_time} seconds to execute.")
         return ldev_dict_of_dict
 
 
 def get_port(horcm_instance):
+    logger.info("Function execution started")
+    start_time = time.time()
     array_of_ports = []
     array_of_keys = []
     dict_of_port_dict = {}
@@ -139,66 +207,58 @@ def get_port(horcm_instance):
             for j, key in enumerate(array_of_keys):
                 port_dict[array_of_keys[j]] = array_of_ports[j]
             if array_of_ports[0] in dict_of_port_dict:
-                # print("Key exists in the dictionary")
                 # dict1 = port_dict
                 # dict2 = dict_of_port_dict[array_of_ports[0]]
                 # keys_in_both_with_diff_values = {k: (dict1[k], dict2[k]) for k in
                 #                                  dict1.keys() & dict2.keys() if dict1[k] != dict2[k]}
-                # print(keys_in_both_with_diff_values)
                 dict_of_port_dict[array_of_ports[0]]['ATTR'] = dict_of_port_dict[array_of_ports[0]]['ATTR'] + ";" + \
                                                                port_dict['ATTR']
-                # print(dict_of_port_dict[array_of_ports[0]]['ATTR'])
 
             else:
-                # print("Key does not exist in the dictionary")
                 dict_of_port_dict[array_of_ports[0]] = port_dict
                 port_dict = {}
     for key in dict_of_port_dict:
-
         if dict_of_port_dict[key]['TYPE'] == "FIBRE":
             text_wwn = ':'.join(
                 dict_of_port_dict[key]['WWN'][i:i + 2] for i in range(0, len(dict_of_port_dict[key]['WWN']), 2))
             dict_of_port_dict[key]['WWN_DELIM'] = text_wwn
             port_host_grps = subprocess.check_output(
                 ["raidcom", "get", "host_grp", "-port", key, "-fx", "-I" + horcm_instance])
-            print("+ Collecting port host_grp data: " + key)
             host_grps_of_a_port_str = ""
             for i, port_host_grp in enumerate(port_host_grps.splitlines()):
                 if i > 0:
                     port_host_grp = port_host_grp.decode()
                     port_host_grp = port_host_grp.split()
                     host_grps_of_a_port_str = host_grps_of_a_port_str + port_host_grp[2] + ";"
-                    # print (host_grps_of_a_port_str)
             dict_of_port_dict[key]['HOST_GROUP_LIST'] = host_grps_of_a_port_str
             port_state_list = subprocess.check_output(
                 ["raidcom", "get", "port", "-fx", "-port", key, "-key", "opt", "-I" + horcm_instance])
-            print("+ Collecting port state data: " + key)
             for i, port_state in enumerate(port_state_list.splitlines()):
                 if i == 0:
                     port_state = port_state.decode()
                     array_of_port_state_keys = port_state.split()
-                    # print (array_of_port_state_keys)
                 else:
                     port_state = port_state.decode()
                     array_of_port_state = port_state.split()
-                    # print(array_of_port_state)
                     for j, state in enumerate(array_of_port_state_keys):
                         dict_of_port_dict[key][array_of_port_state_keys[j]] = array_of_port_state[j]
         if dict_of_port_dict[key]['TYPE'] == "ISCSI":
             port_state = subprocess.check_output(
                 ["raidcom", "get", "port", "-fx", "-port", key, "-key", "opt", "-I" + horcm_instance])
-            print("+ Collecting port state data: " + key)
             for i, port_state in enumerate(port_state.splitlines()):
                 port_state = port_state.decode()
                 array_of_port_state_keys = port_state.split(":")
-                # print(array_of_port_state_keys)
                 array_of_port_state_values = ''.join(array_of_port_state_keys[1:])
                 dict_of_port_dict[key][array_of_port_state_keys[0]] = array_of_port_state_values
-    print(dict_of_port_dict)
+    end_time = time.time()
+    execution_time = end_time - start_time
+    logger.info(f"The function took {execution_time} seconds to execute.")
     return dict_of_port_dict
 
 
 def create_host_grp_array_of_arrays(horcm_instance):
+        logger.info("Function execution started")
+        start_time = time.time()
         vsm_dict=create_vsm_dict(horcm_instance)
         array_of_ports=[]
         array_of_host_grps=[['PORT', 'GID','PORT-GID', 'GROUP_NAME', 'Serial', 'HMD', 'HMO_BITs', 'VSM_NAME', 'VSM_ID']]
@@ -220,12 +280,16 @@ def create_host_grp_array_of_arrays(horcm_instance):
                                 if host_grp[4] == "LINUX/IRIX":
                                         host_grp[4] = "LINUX"
                                 host_grp_concat_hmo =  [host_grp[0] , host_grp[1] ,host_grp[0]+ "-" + host_grp[1] ,host_grp[2] ,host_grp[3] ,host_grp[4], hmo, vsm_dict[key], key]
-                                print(host_grp_concat_hmo)
                                 array_of_host_grps.append(host_grp_concat_hmo)
+        end_time = time.time()
+        execution_time = end_time - start_time
+        logger.info(f"The function took {execution_time} seconds to execute.")
         return array_of_host_grps
 
 
 def get_hba_wwns_of_a_host_grp_by_name(port, host_grp_name, horcm_instance):
+    logger.info("Function execution started")
+    start_time = time.time()
     array_of_wwns = []
     wwns = subprocess.check_output(
         ["raidcom", "get", "hba_wwn", "-port", port, host_grp_name, "-fx", "-I" + horcm_instance])
@@ -234,9 +298,14 @@ def get_hba_wwns_of_a_host_grp_by_name(port, host_grp_name, horcm_instance):
         wwn = wwn.decode()
         wwn = wwn.split()
         array_of_wwns.append(wwn)
+    end_time = time.time()
+    execution_time = end_time - start_time
+    logger.info(f"The function took {execution_time} seconds to execute.")
     return array_of_wwns
 
 def get_hba_wwns_of_all_host_groups(horcm_instance):
+    logger.info("Function execution started")
+    start_time = time.time()
     wwn = []
     columns = []
     array_of_wwns = []
@@ -255,10 +324,14 @@ def get_hba_wwns_of_all_host_groups(horcm_instance):
                     w.append("VSM_NAME")
                     w.append("VSM_ID")
     array_of_wwns.insert(0,columns)
-    print (array_of_wwns[0])
+    end_time = time.time()
+    execution_time = end_time - start_time
+    logger.info(f"The function took {execution_time} seconds to execute.")
     return array_of_wwns
 
 def get_luns_of_a_host_grp_by_name(port, host_grp_name, horcm_instance):
+        logger.info("Function execution started")
+        start_time = time.time()
         dict_of_luns = {}
         luns = subprocess.check_output(
             ["raidcom", "get", "lun", "-port", port, host_grp_name, "-fx", "-I" + horcm_instance])
@@ -269,9 +342,14 @@ def get_luns_of_a_host_grp_by_name(port, host_grp_name, horcm_instance):
                 lun = lun.split()
                 # dict_of_luns["0x" + lun[5]] = lun[3]
                 dict_of_luns[lun[5]] = lun[3]
+        end_time = time.time()
+        execution_time = end_time - start_time
+        logger.info(f"The function took {execution_time} seconds to execute.")
         return dict_of_luns
 
 def get_luns_of_all_host_groups(horcm_instance):
+    logger.info("Function execution started")
+    start_time = time.time()
     luns = []
     columns = []
     array_of_luns = []
@@ -287,14 +365,18 @@ def get_luns_of_all_host_groups(horcm_instance):
             columns.append("LDEV_ID")
             columns.append("LUN_ID")
     array_of_luns.insert(0, columns)
+    end_time = time.time()
+    execution_time = end_time - start_time
+    logger.info(f"The function took {execution_time} seconds to execute.")
     return array_of_luns
 
 
 def output_horcm_text_data(horcm_instance):
+        logger.info("Function execution started")
+        start_time = time.time()
         horcm_ldev = []
         get_ldev_list_mapped_output = []
         get_ldev_list_mapped_output = get_ldev_list_mapped(horcm_instance)
-        # print (get_ldev_list_mapped_output)
         for i in get_ldev_list_mapped_output:
                 if re.search(r'HORC', i[7]) or re.search(r'GAD', i[7]):
                         chars_ldev = [char for char in i[1]]
@@ -309,7 +391,6 @@ def output_horcm_text_data(horcm_instance):
                                 chars_ldev.insert(0, "0")
                         chars_ldev.insert(2, ":")
                         text_ldev = ''.join(chars_ldev)
-                        # print(chars_ldev, len(chars_ldev))
                         horcm_ldev.append("discover_remote" + '\t' + "discover_remote_" + i[1] + "_0" + '\t' + i[0] + '\t' + text_ldev + '\t' + "0")
                         horcm_ldev.append("discover_remote" + '\t' + "discover_remote_" + i[1] + "_h1" + '\t' + i[0] + '\t' + text_ldev + '\t' + "h1")
                         horcm_ldev.append("discover_remote" + '\t' + "discover_remote_" + i[1] + "_h2" + '\t' + i[0] + '\t' + text_ldev + '\t' + "h2")
@@ -327,13 +408,17 @@ def output_horcm_text_data(horcm_instance):
                                 chars_ldev.insert(0, "0")
                         chars_ldev.insert(2, ":")
                         text_ldev = ''.join(chars_ldev)
-                        # print(chars_ldev, len(chars_ldev))
                         horcm_ldev.append("discover_local" + '\t' + "discover_local_" + i[1] + "_0" + '\t' + i[0] + '\t' + text_ldev + '\t' + "0")
                         horcm_ldev.append("discover_local" + '\t' + "discover_local_" + i[1] + "_1" + '\t' + i[0] + '\t' + text_ldev + '\t' + "1")
                         horcm_ldev.append("discover_local" + '\t' + "discover_local_" + i[1] + "_2" + '\t' + i[0] + '\t' + text_ldev + '\t' + "2")
+        end_time = time.time()
+        execution_time = end_time - start_time
+        logger.info(f"The function took {execution_time} seconds to execute.")
         return horcm_ldev
 
 def add_horcm_ldev_data_to_horcm(horcm_instance, path):
+    logger.info("Function execution started")
+    start_time = time.time()
     f = []
     horcm_ldev_data = output_horcm_text_data(horcm_instance)
     shutdown_horcm_instance(horcm_instance, get_home_path())
@@ -353,9 +438,13 @@ def add_horcm_ldev_data_to_horcm(horcm_instance, path):
     for l in horcm_data:
         l = l.split()
         f.append(l)
-    print (f)
+    end_time = time.time()
+    execution_time = end_time - start_time
+    logger.info(f"The function took {execution_time} seconds to execute.")
     return f
 def discover_replication_remote(horcm_instance):
+    logger.info("Function execution started")
+    start_time = time.time()
     array_of_mus = []
     pairdisplay_fxe = subprocess.check_output(
         ["pairdisplay", "-g", "discover_remote", "-fxe", "-CLI", "-l", "-IH" + horcm_instance])
@@ -370,9 +459,14 @@ def discover_replication_remote(horcm_instance):
         mu = line.split()
         for obj in mu:
             array_of_mus[i].append(obj)
+    end_time = time.time()
+    execution_time = end_time - start_time
+    logger.info(f"The function took {execution_time} seconds to execute.")
     return array_of_mus
 
 def discover_replication_local(horcm_instance):
+    logger.info("Function execution started")
+    start_time = time.time()
     array_of_mus = []
     pairdisplay_local_fcxe = subprocess.check_output(
         ["pairdisplay", "-g", "discover_local", "-fxce", "-CLI", "-l", "-ISI" + horcm_instance])
@@ -381,9 +475,14 @@ def discover_replication_local(horcm_instance):
         mu = line.split()
         array_of_mus.append(mu)
     array_of_mus[0].append("#")
+    end_time = time.time()
+    execution_time = end_time - start_time
+    logger.info(f"The function took {execution_time} seconds to execute.")
     return array_of_mus
 
 def get_rcu(horcm_instance):
+    logger.info("Function execution started")
+    start_time = time.time()
     array_of_rcu = []
     get_rcus = subprocess.check_output(
         ["raidcom", "get", "rcu", "-fx", "-I" + horcm_instance])
@@ -397,10 +496,14 @@ def get_rcu(horcm_instance):
             for j in i:
                 j = j.split()
                 array_of_rcu.append(j[0:12])
-    print (array_of_rcu)
+    end_time = time.time()
+    execution_time = end_time - start_time
+    logger.info(f"The function took {execution_time} seconds to execute.")
     return array_of_rcu
 
 def get_license(horcm_instance):
+    logger.info("Function execution started")
+    start_time = time.time()
     array_of_lic = []
     lic = subprocess.check_output(
         ["raidcom", "get", "license", "-I" + horcm_instance])
@@ -409,9 +512,14 @@ def get_license(horcm_instance):
         license = line.split()
         license = [license[0], license[1], license[2], license[3], license[4], license[5], license[6], license[7], ' '.join(license[8:])]
         array_of_lic.append(license)
+    end_time = time.time()
+    execution_time = end_time - start_time
+    logger.info(f"The function took {execution_time} seconds to execute.")
     return array_of_lic
 
 def get_pool(horcm_instance):
+    logger.info("Function execution started")
+    start_time = time.time()
     array_of_pools = []
     pools = subprocess.check_output(
         ["raidcom", "get", "pool", "-key", "opt", "-fx", "-I" + horcm_instance])
@@ -426,9 +534,14 @@ def get_pool(horcm_instance):
         pool_used = line.split()
         for p in pool_used:
             array_of_pools[i].append(p)
+    end_time = time.time()
+    execution_time = end_time - start_time
+    logger.info(f"The function took {execution_time} seconds to execute.")
     return array_of_pools
 
 def get_quorum(horcm_instance):
+    logger.info("Function execution started")
+    start_time = time.time()
     dict_of_quorum = {}
     dict_of_dict_of_quorum = {}
     quorum = subprocess.check_output(
@@ -445,28 +558,42 @@ def get_quorum(horcm_instance):
                 main_key = value
             dict_of_quorum[key] = value
         dict_of_dict_of_quorum[main_key] = dict_of_quorum
-    # print (array_of_quorum)
+    end_time = time.time()
+    execution_time = end_time - start_time
+    logger.info(f"The function took {execution_time} seconds to execute.")
     return dict_of_dict_of_quorum
 
 def get_jnl(horcm_instance):
+    logger.info("Function execution started")
+    start_time = time.time()
     array_of_jnl = []
     get_jnls = subprocess.check_output(["raidcom", "get", "journal", "-fx", "-I" + horcm_instance])
     get_jnls = get_jnls.decode().splitlines()
     for jnl in get_jnls:
         jnl = jnl.split()
         array_of_jnl.append(jnl)
+    end_time = time.time()
+    execution_time = end_time - start_time
+    logger.info(f"The function took {execution_time} seconds to execute.")
     return array_of_jnl
 
 def get_jnl_mus(horcm_instance):
+    logger.info("Function execution started")
+    start_time = time.time()
     array_of_jnl = []
     get_jnls = subprocess.check_output(["raidcom", "get", "journal", "-fx", "-key", "opt", "-I" + horcm_instance])
     get_jnls = get_jnls.decode().splitlines()
     for jnl in get_jnls:
         jnl = jnl.split()
         array_of_jnl.append(jnl)
+    end_time = time.time()
+    execution_time = end_time - start_time
+    logger.info(f"The function took {execution_time} seconds to execute.")
     return array_of_jnl
 
 def get_snapshot(horcm_instance):
+    logger.info("Function execution started")
+    start_time = time.time()
     array_of_snap = []
     get_snaps = subprocess.check_output(["raidcom", "get", "snapshot", "-fx", "-I" + horcm_instance])
     get_snaps = get_snaps.decode().splitlines()
@@ -481,7 +608,13 @@ def get_snapshot(horcm_instance):
                 j = j.split()
                 array_of_snap.append(j)
     array_of_snap[:0] = [columns]
+    end_time = time.time()
+    execution_time = end_time - start_time
+    logger.info(f"The function took {execution_time} seconds to execute.")
     return array_of_snap
+
+
+
 
 horcm_instance = "666"
 storage_ip = "10.0.0.118"
@@ -491,6 +624,7 @@ create_horcm_file(horcm_instance, get_home_path(), storage_ip)
 start_horcm_instance(horcm_instance, get_home_path())
 raidcom_login(horcm_instance, username, password)
 file = init_excel_file(horcm_instance)
+##
 ##
 
 add_sheet_to_excel(get_snapshot(horcm_instance), file, "Snapshots", False)
@@ -512,4 +646,7 @@ add_sheet_to_excel(get_ldev_list_defailed_by_type(horcm_instance, "unmapped"), f
 ## undefined on simulators = raidcom: [EX_ENOOBJ] No such Object in the RAID ; exit code 1
 ##add_sheet_to_excel(get_ldev_list_defailed_by_type(horcm_instance, "undefined"), file, "Ldevs_undefined", True)
 add_sheet_to_excel(create_host_grp_array_of_arrays(horcm_instance), file, "Host_groups", False)
+
+
+
 
