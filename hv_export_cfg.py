@@ -439,6 +439,7 @@ create_horcm_file(horcm_instance, get_home_path(), storage_ip)
 start_horcm_instance(horcm_instance, get_home_path())
 raidcom_login(horcm_instance, username, password)
 file = init_excel_file(horcm_instance)
+##
 
 add_sheet_to_excel(get_license(horcm_instance), file, "License", False)
 add_sheet_to_excel(get_pool(horcm_instance), file, "Pools", False)
