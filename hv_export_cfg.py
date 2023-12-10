@@ -8,7 +8,7 @@ from openpyxl import load_workbook
 import logging
 import traceback
 import time
-
+import optparse
 
 # Create a custom logger
 logger = logging.getLogger("logger")
@@ -27,6 +27,21 @@ f_handler.setFormatter(f_format)
 # Add handlers to the logger
 logger.addHandler(c_handler)
 logger.addHandler(f_handler)
+
+
+def get_arguments():
+    parser = optparse.OptionParser()
+    parser.add_option("-s", "--storage", dest="storage", help="Enter a storage IP address xxx.xxx.xxx.xxx, UDP port 31001 will be used automatically")
+    parser.add_option("-u", "--user", dest="user", help="Enter the username for the storage system")
+    parser.add_option("-p", "--password", dest="password", help="Enter the password for the storage system")
+    (options, arguments) = parser.parse_args()
+    if not options.storage:
+        parser.exit("[-] Please specify a storage system IP address, use --help or -h for more info.")
+    elif not options.user:
+        parser.exit("[-] Please specify the username to connect the storage system, use --help or -h for more info.")
+    elif not options.password:
+        parser.exit("[-] Please specify the password to connect the storage system, use --help or -h for more info.")
+    return options
 
 def get_home_path():
     logger.info("Function execution started")
@@ -84,18 +99,6 @@ def create_horcm_file(horcm_instance, path, storage_ip):
         execution_time = end_time - start_time
         logger.info(f"The function took {execution_time} seconds to execute.")
 
-def start_horcm_instance(horcm_instance, path):
-        logger.info("Function execution started")
-        start_time = time.time()
-        horcm_file_full_path = path + "\\" + "horcm" + horcm_instance + ".conf"
-        os.environ['HORCM_CONF'] = horcm_file_full_path
-        os.environ['HORCMINST'] = horcm_instance
-        os.environ['HORCM_EVERYCLI'] = "1"
-        subprocess.run(["horcmstart"])
-        end_time = time.time()
-        execution_time = end_time - start_time
-        logger.info(f"The function took {execution_time} seconds to execute.")
-
 def shutdown_horcm_instance(horcm_instance, path):
     logger.info("Function execution started")
     start_time = time.time()
@@ -107,6 +110,24 @@ def shutdown_horcm_instance(horcm_instance, path):
     end_time = time.time()
     execution_time = end_time - start_time
     logger.info(f"The function took {execution_time} seconds to execute.")
+
+def start_horcm_instance(horcm_instance, path):
+        logger.info("Function execution started")
+        start_time = time.time()
+        try:
+            shutdown_horcm_instance(horcm_instance, path)
+        except:
+            logger.info("Could not shutdown HORCM instance, might be down already")
+        horcm_file_full_path = path + "\\" + "horcm" + horcm_instance + ".conf"
+        os.environ['HORCM_CONF'] = horcm_file_full_path
+        os.environ['HORCMINST'] = horcm_instance
+        os.environ['HORCM_EVERYCLI'] = "1"
+        subprocess.run(["horcmstart"])
+        end_time = time.time()
+        execution_time = end_time - start_time
+        logger.info(f"The function took {execution_time} seconds to execute.")
+
+
 
 def raidcom_login(horcm_instance, username, password):
         logger.info("Function execution started")
@@ -419,6 +440,8 @@ def output_horcm_text_data(horcm_instance):
 def add_horcm_ldev_data_to_horcm(horcm_instance, path):
     logger.info("Function execution started")
     start_time = time.time()
+    local = False
+    remote = False
     f = []
     horcm_ldev_data = output_horcm_text_data(horcm_instance)
     shutdown_horcm_instance(horcm_instance, get_home_path())
@@ -428,9 +451,15 @@ def add_horcm_ldev_data_to_horcm(horcm_instance, path):
         horcm_file.write("# dev_group" + '\t' + "dev_name" + '\t' + "Serial#" + '\t' + "CU:LDEV(LDEV#)" + '\t' + "MU#" + '\n')
         for mu in horcm_ldev_data:
             horcm_file.write(mu + '\n')
+            if re.search(r'local', mu):
+                local = True
+            if re.search(r'remote', mu):
+                remote = True
         horcm_file.write('\n' + "HORCM_INSTP" + '\n')
-        horcm_file.write("discover_remote" + '\t' + "localhost" + '\t' + "44667" + '\n')
-        horcm_file.write("discover_local" + '\t' + "localhost" + '\t' + "44667" + '\n')
+        if remote:
+            horcm_file.write("discover_remote" + '\t' + "localhost" + '\t' + "44667" + '\n')
+        if local:
+            horcm_file.write("discover_local" + '\t' + "localhost" + '\t' + "44667" + '\n')
     start_horcm_instance(horcm_instance, get_home_path())
     with open(horcm_file_full_path, 'r') as horcm_file:
         horcm_data = horcm_file.read()
@@ -446,19 +475,20 @@ def discover_replication_remote(horcm_instance):
     logger.info("Function execution started")
     start_time = time.time()
     array_of_mus = []
-    pairdisplay_fxe = subprocess.check_output(
-        ["pairdisplay", "-g", "discover_remote", "-fxe", "-CLI", "-l", "-IH" + horcm_instance])
-    pairdisplay_fxc = subprocess.check_output(
-        ["pairdisplay", "-g", "discover_remote", "-fxc", "-CLI", "-l", "-IH" + horcm_instance])
-    pairdisplay_fxe = pairdisplay_fxe.decode().splitlines()
-    for i , line in enumerate(pairdisplay_fxe):
-        mu = line.split()
-        array_of_mus.append(mu)
-    pairdisplay_fxc = pairdisplay_fxc.decode().splitlines()
-    for i , line in enumerate(pairdisplay_fxc):
-        mu = line.split()
-        for obj in mu:
-            array_of_mus[i].append(obj)
+    try:
+        pairdisplay_fxe = subprocess.check_output(["pairdisplay", "-g", "discover_remote", "-fxe", "-CLI", "-l", "-IH" + horcm_instance])
+        pairdisplay_fxc = subprocess.check_output(["pairdisplay", "-g", "discover_remote", "-fxc", "-CLI", "-l", "-IH" + horcm_instance])
+        pairdisplay_fxe = pairdisplay_fxe.decode().splitlines()
+        for i , line in enumerate(pairdisplay_fxe):
+            mu = line.split()
+            array_of_mus.append(mu)
+        pairdisplay_fxc = pairdisplay_fxc.decode().splitlines()
+        for i , line in enumerate(pairdisplay_fxc):
+            mu = line.split()
+            for obj in mu:
+                array_of_mus[i].append(obj)
+    except:
+        logger.error("pairdisplay did not work")
     end_time = time.time()
     execution_time = end_time - start_time
     logger.info(f"The function took {execution_time} seconds to execute.")
@@ -468,13 +498,16 @@ def discover_replication_local(horcm_instance):
     logger.info("Function execution started")
     start_time = time.time()
     array_of_mus = []
-    pairdisplay_local_fcxe = subprocess.check_output(
-        ["pairdisplay", "-g", "discover_local", "-fxce", "-CLI", "-l", "-ISI" + horcm_instance])
-    pairdisplay_local_fcxe = pairdisplay_local_fcxe.decode().splitlines()
-    for i , line in enumerate(pairdisplay_local_fcxe):
-        mu = line.split()
-        array_of_mus.append(mu)
-    array_of_mus[0].append("#")
+    try:
+        pairdisplay_local_fcxe = subprocess.check_output(
+            ["pairdisplay", "-g", "discover_local", "-fxce", "-CLI", "-l", "-ISI" + horcm_instance])
+        pairdisplay_local_fcxe = pairdisplay_local_fcxe.decode().splitlines()
+        for i , line in enumerate(pairdisplay_local_fcxe):
+            mu = line.split()
+            array_of_mus.append(mu)
+        array_of_mus[0].append("#")
+    except:
+        logger.error("pairdisplay did not work")
     end_time = time.time()
     execution_time = end_time - start_time
     logger.info(f"The function took {execution_time} seconds to execute.")
@@ -613,13 +646,24 @@ def get_snapshot(horcm_instance):
     logger.info(f"The function took {execution_time} seconds to execute.")
     return array_of_snap
 
+def is_valid_ip(ip):
+    logger.info("Function execution started")
+    start_time = time.time()
+    pattern = re.compile(r"^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$")
+    end_time = time.time()
+    execution_time = end_time - start_time
+    logger.info(f"The function took {execution_time} seconds to execute.")
+    return bool(pattern.match(ip))
 
-
+user_input = get_arguments()
 
 horcm_instance = "666"
-storage_ip = "10.0.0.118"
-username = "maintenance"
-password = "raid-maintenance"
+storage_ip = user_input.storage
+if not is_valid_ip(storage_ip):
+    logger.error("Invalid IP address was specified: {storage_ip}")
+    exit()
+username = user_input.user
+password = user_input.password
 create_horcm_file(horcm_instance, get_home_path(), storage_ip)
 start_horcm_instance(horcm_instance, get_home_path())
 raidcom_login(horcm_instance, username, password)
