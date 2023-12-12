@@ -58,11 +58,26 @@ def get_home_path():
 def init_excel_file(horcm_instance):
     logger.info("Function execution started")
     start_time = time.time()
-    get_system = subprocess.check_output(["raidcom", "get", "system", "-fx", "-I" + horcm_instance]).decode().splitlines()
+    get_system = []
+    get_resource = []
+    get_system_opt = []
+    get_system_opt_som = []
+    try:
+        get_system = subprocess.check_output(["raidcom", "get", "system", "-fx", "-I" + horcm_instance]).decode().splitlines()
+    except:
+        logger.error("Could not execute raidcom get system")
     get_resource = subprocess.check_output(["raidcom", "get", "resource", "-fx", "-key", "opt", "-I" + horcm_instance]).decode().splitlines()
-    get_system_opt = subprocess.check_output(["raidcom", "get", "system_opt", "-fx", "-I" + horcm_instance]).decode().splitlines()
-    get_system_opt_som = subprocess.check_output(["raidcom", "get", "system_opt", "-key", "mode", "-lpr", "system", "-I" + horcm_instance]).decode().splitlines()
-    serial = get_system[0].split(":")[1].strip()
+    try:
+        get_system_opt = subprocess.check_output(["raidcom", "get", "system_opt", "-fx", "-I" + horcm_instance]).decode().splitlines()
+    except:
+        logger.error("Could not execute raidcom get system_opt")
+    try:
+        get_system_opt_som = subprocess.check_output(["raidcom", "get", "system_opt", "-key", "mode", "-lpr", "system", "-I" + horcm_instance]).decode().splitlines()
+    except:
+        logger.error("Could not execute raidcom get system_opt")
+
+    serial = get_resource[1].split()[5].strip()
+    # serial = get_system[0].split(":")[1].strip()
     init = get_system + ['\n'] + get_resource + ['\n'] + get_system_opt + ['\n'] + get_system_opt_som
     init_df = pd.DataFrame(init)
     excel_file_path = get_home_path() + "\\" + serial + "_cfg_export.xlsx"
@@ -78,7 +93,11 @@ def create_vsm_dict(horcm_instance):
     vsm_dict = {}
     get_resource = subprocess.check_output(["raidcom", "get", "resource", "-fx", "-key", "opt", "-I" + horcm_instance]).decode().splitlines()
     for vsm in get_resource[1:]:
-        vsm_dict[vsm.split()[1].strip()] = vsm.split()[0].strip()
+        splitter_by_2_spaces_or_more = re.split(r' {4,}', vsm)
+        key = splitter_by_2_spaces_or_more[1].strip()
+        value = splitter_by_2_spaces_or_more[0].strip()
+        vsm_dict[key] = value
+        # vsm_dict[vsm.split()[1].strip()] = vsm.split()[0].strip()
     end_time = time.time()
     execution_time = end_time - start_time
     logger.info(f"The function took {execution_time} seconds to execute.")
