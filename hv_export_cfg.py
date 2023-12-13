@@ -109,7 +109,7 @@ def create_horcm_file(horcm_instance, path, storage_ip):
         with open(horcm_file_full_path, 'w') as horcm_file:
                 horcm_file.write("HORCM_MON" + '\n')
                 horcm_file.write("#ip_address" + '\t' + "service" + '\t' + "poll(10ms)" + '\t' + "timeout(10ms)" + '\n')
-                horcm_file.write("#localhost" + '\t' + "44666" + '\t' + "1000" + '\t\t' + "3000" + '\n\n\n')
+                horcm_file.write("localhost" + '\t' + "44666" + '\t' + "1000" + '\t\t' + "3000" + '\n\n\n')
                 horcm_file.write("HORCM_CMD" + '\n')
                 horcm_file.write("#dev_name" + '\t' + "dev_name" + '\t' + "dev_name)" + '\t' + "dev_name" + '\n')
                 horcm_file.write("\\\\.\\IPCMD-" + storage_ip + "-31001" + '\n')
@@ -372,15 +372,21 @@ def get_luns_of_a_host_grp_by_name(port, host_grp_name, horcm_instance):
         logger.info("Function execution started")
         start_time = time.time()
         dict_of_luns = {}
-        luns = subprocess.check_output(
-            ["raidcom", "get", "lun", "-port", port, host_grp_name, "-fx", "-I" + horcm_instance])
-        luns = luns.splitlines()
-        for lun in luns:
-            lun = lun.decode()
-            if not "HMO_BITs" in lun:
-                lun = lun.split()
-                # dict_of_luns["0x" + lun[5]] = lun[3]
-                dict_of_luns[lun[5]] = lun[3]
+        luns = []
+        get_luns_err = False
+        try:
+            luns = subprocess.check_output(["raidcom", "get", "lun", "-port", port, host_grp_name, "-fx", "-I" + horcm_instance])
+        except:
+            logger.error("raidcom get lun did not work")
+            get_luns_err = True
+        if not get_luns_err:
+            luns = luns.splitlines()
+            for lun in luns:
+                lun = lun.decode()
+                if not "HMO_BITs" in lun:
+                    lun = lun.split()
+                    # dict_of_luns["0x" + lun[5]] = lun[3]
+                    dict_of_luns[lun[5]] = lun[3]
         end_time = time.time()
         execution_time = end_time - start_time
         logger.info(f"The function took {execution_time} seconds to execute.")
@@ -595,20 +601,22 @@ def get_quorum(horcm_instance):
     start_time = time.time()
     dict_of_quorum = {}
     dict_of_dict_of_quorum = {}
-    quorum = subprocess.check_output(
-        ["raidcom", "get", "quorum", "-fx", "-I" + horcm_instance])
-    quorum = quorum.decode().split('\r\n\r\n')
-    for line in quorum:
-        qline = line.splitlines()
-        dict_of_quorum = {}
-        for attrib in qline:
-            attrib = attrib.split(":")
-            key = attrib[0].strip()
-            value = attrib[1].strip()
-            if key == "QRDID":
-                main_key = value
-            dict_of_quorum[key] = value
-        dict_of_dict_of_quorum[main_key] = dict_of_quorum
+    try:
+        quorum = subprocess.check_output(["raidcom", "get", "quorum", "-fx", "-I" + horcm_instance])
+        quorum = quorum.decode().split('\r\n\r\n')
+        for line in quorum:
+            qline = line.splitlines()
+            dict_of_quorum = {}
+            for attrib in qline:
+                attrib = attrib.split(":")
+                key = attrib[0].strip()
+                value = attrib[1].strip()
+                if key == "QRDID":
+                    main_key = value
+                dict_of_quorum[key] = value
+            dict_of_dict_of_quorum[main_key] = dict_of_quorum
+    except:
+        logger.error("Could not execute raidcom get quorum")
     end_time = time.time()
     execution_time = end_time - start_time
     logger.info(f"The function took {execution_time} seconds to execute.")
