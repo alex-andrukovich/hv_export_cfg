@@ -585,7 +585,10 @@ def get_pool(horcm_instance):
     pools = pools.decode().splitlines()
     pools_used = pools_used.decode().splitlines()
     for i , line in enumerate(pools):
-        pool = line.split()
+        pool_name = line[15:50]
+        line_without_pool_name = line[:15] + line[50:]
+        pool = line_without_pool_name.split()
+        pool.append(pool_name.strip())
         array_of_pools.append(pool)
     for i , line in enumerate(pools_used):
         pool_used = line.split()
@@ -626,11 +629,28 @@ def get_jnl(horcm_instance):
     logger.info("Function execution started")
     start_time = time.time()
     array_of_jnl = []
-    get_jnls = subprocess.check_output(["raidcom", "get", "journal", "-fx", "-I" + horcm_instance])
-    get_jnls = get_jnls.decode().splitlines()
-    for jnl in get_jnls:
-        jnl = jnl.split()
-        array_of_jnl.append(jnl)
+    try:
+        get_jnls = subprocess.check_output(["raidcom", "get", "journal", "-fx", "-I" + horcm_instance])
+        get_jnls = get_jnls.decode().splitlines()
+        for i, jnl in enumerate(get_jnls):
+            jnl = jnl.split()
+            if i > 0:
+                jnl_ldev_id = jnl[11]
+                get_jnl_ldev_id = subprocess.check_output(["raidcom", "get", "ldev", "-ldev_id", "0x" + jnl_ldev_id, "-fx", "-I" + horcm_instance])
+                split_lines_of_get_jnl_ldev_id = get_jnl_ldev_id.decode().splitlines()
+                for jnl_ldev_data_line in split_lines_of_get_jnl_ldev_id:
+                    jnl_data_line_list = jnl_ldev_data_line.split(':')
+                    if "VOL_Capacity(BLK)" in jnl_data_line_list[0].strip():
+                        jnl_capacity_blk = jnl_data_line_list[1].strip()
+                        jnl_capacity_blk = int(jnl_capacity_blk)
+                        jnl_capacity_tb = jnl_capacity_blk/2/1024/1024/1024
+                        jnl_capacity_tb_fmt = format(jnl_capacity_tb, '.2f')
+                        jnl.append(jnl_capacity_tb_fmt)
+            else:
+                jnl.append("JNL_capacity_TB")
+            array_of_jnl.append(jnl)
+    except:
+        logger.error(f"Could not obtain journal data.")
     end_time = time.time()
     execution_time = end_time - start_time
     logger.info(f"The function took {execution_time} seconds to execute.")
