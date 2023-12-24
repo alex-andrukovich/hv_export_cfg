@@ -330,12 +330,29 @@ def get_hba_wwns_of_a_host_grp_by_name(port, host_grp_name, horcm_instance):
     logger.info("Function execution started")
     start_time = time.time()
     array_of_wwns = []
+    loggedin_wwns = []
+    loggedin = subprocess.check_output(["raidcom", "get", "port", "-port", port, "-I" + horcm_instance])
+    loggedin = loggedin.splitlines()
+    try:
+        for loggedin_wwn in loggedin:
+            loggedin_wwn = loggedin_wwn.decode()
+            loggedin_wwn = loggedin_wwn.split()
+            loggedin_wwns.append(loggedin_wwn[1])
+        loggedin_wwns = loggedin_wwns[1:]
+    except:
+        logger.error(f"Could not get a list of logged in WWNs for port {port}.")
     wwns = subprocess.check_output(
         ["raidcom", "get", "hba_wwn", "-port", port, host_grp_name, "-fx", "-I" + horcm_instance])
     wwns = wwns.splitlines()
     for wwn in wwns:
         wwn = wwn.decode()
         wwn = wwn.split()
+        if wwn[3] == "HWWN":
+            wwn.append("logged_in_status")
+        elif wwn[3] in loggedin_wwns:
+            wwn.append("logged_in")
+        else:
+            wwn.append("not_logged_in")
         array_of_wwns.append(wwn)
     end_time = time.time()
     execution_time = end_time - start_time
@@ -375,7 +392,7 @@ def get_luns_of_a_host_grp_by_name(port, host_grp_name, horcm_instance):
         luns = []
         get_luns_err = False
         try:
-            luns = subprocess.check_output(["raidcom", "get", "lun", "-port", port, host_grp_name, "-fx", "-I" + horcm_instance])
+            luns = subprocess.check_output(["raidcom", "get", "lun", "-port", port, host_grp_name, "-fx", "-key", "opt", "-I" + horcm_instance])
         except:
             logger.error("raidcom get lun did not work")
             get_luns_err = True
@@ -386,7 +403,14 @@ def get_luns_of_a_host_grp_by_name(port, host_grp_name, horcm_instance):
                 if not "HMO_BITs" in lun:
                     lun = lun.split()
                     # dict_of_luns["0x" + lun[5]] = lun[3]
-                    dict_of_luns[lun[5]] = lun[3]
+                    value = []
+                    # LDEV ID
+                    value.append(lun[5])
+                    # LUN ID
+                    value.append(lun[3])
+                    # Reserve status
+                    value.append(lun[8])
+                    dict_of_luns[lun[5]] = value
         end_time = time.time()
         execution_time = end_time - start_time
         logger.info(f"The function took {execution_time} seconds to execute.")
@@ -404,11 +428,12 @@ def get_luns_of_all_host_groups(horcm_instance):
         if not re.search("GROUP_NAME", host_grp[3]):
             luns = get_luns_of_a_host_grp_by_name(host_grp[0], host_grp[3], horcm_instance)
             for l in luns:
-                array_of_luns.append([host_grp[0], host_grp[1], host_grp[2], host_grp[3], host_grp[4], host_grp[5], host_grp[6], host_grp[7], host_grp[8], l, luns[l]])
+                array_of_luns.append([host_grp[0], host_grp[1], host_grp[2], host_grp[3], host_grp[4], host_grp[5], host_grp[6], host_grp[7], host_grp[8], l, luns[l][1], luns[l][2]])
         else:
             columns = host_grp
             columns.append("LDEV_ID")
             columns.append("LUN_ID")
+            columns.append("Reserve_status")
     array_of_luns.insert(0, columns)
     end_time = time.time()
     execution_time = end_time - start_time
@@ -671,6 +696,7 @@ def get_jnl_mus(horcm_instance):
     return array_of_jnl
 
 def get_snapshot(horcm_instance):
+    columns = []
     logger.info("Function execution started")
     start_time = time.time()
     array_of_snap = []
@@ -686,7 +712,10 @@ def get_snapshot(horcm_instance):
             for j in i:
                 j = j.split()
                 array_of_snap.append(j)
-    array_of_snap[:0] = [columns]
+    temp = []
+    temp.append(columns)
+    #array_of_snap[:0] = [columns]
+    array_of_snap[:0] = temp
     end_time = time.time()
     execution_time = end_time - start_time
     logger.info(f"The function took {execution_time} seconds to execute.")
@@ -717,6 +746,8 @@ file = init_excel_file(horcm_instance)
 ##
 ##
 
+add_sheet_to_excel(get_luns_of_all_host_groups(horcm_instance), file, "Luns", False)
+add_sheet_to_excel(get_hba_wwns_of_all_host_groups(horcm_instance), file, "Hba_wwns", False)
 add_sheet_to_excel(get_snapshot(horcm_instance), file, "Snapshots", False)
 add_sheet_to_excel(get_jnl(horcm_instance), file, "Journals", False)
 add_sheet_to_excel(get_jnl_mus(horcm_instance), file, "Journal_MUs", False)
@@ -728,15 +759,9 @@ add_sheet_to_excel(get_port(horcm_instance), file, "Ports", True)
 add_sheet_to_excel(add_horcm_ldev_data_to_horcm(horcm_instance, get_home_path()), file, "Horcm", False)
 add_sheet_to_excel(discover_replication_remote(horcm_instance), file, "Replication_remote", False)
 add_sheet_to_excel(discover_replication_local(horcm_instance), file, "Replication_local", False)
-add_sheet_to_excel(get_luns_of_all_host_groups(horcm_instance), file, "Luns", False)
-add_sheet_to_excel(get_hba_wwns_of_all_host_groups(horcm_instance), file, "Hba_wwns", False)
 add_sheet_to_excel(get_ldev_list_defailed_by_type(horcm_instance, "mapped"), file, "Ldevs_mapped", True)
 add_sheet_to_excel(get_ldev_list_defailed_by_type(horcm_instance, "defined"), file, "Ldevs_defined", True)
 add_sheet_to_excel(get_ldev_list_defailed_by_type(horcm_instance, "unmapped"), file, "Ldevs_unmapped", True)
 ## undefined on simulators = raidcom: [EX_ENOOBJ] No such Object in the RAID ; exit code 1
 ##add_sheet_to_excel(get_ldev_list_defailed_by_type(horcm_instance, "undefined"), file, "Ldevs_undefined", True)
 add_sheet_to_excel(create_host_grp_array_of_arrays(horcm_instance), file, "Host_groups", False)
-
-
-
-
