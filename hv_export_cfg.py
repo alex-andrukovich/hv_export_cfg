@@ -31,10 +31,11 @@ logger.addHandler(f_handler)
 
 def get_arguments():
     parser = optparse.OptionParser()
-    parser.add_option("-s", "--storage", dest="storage", help="Enter a storage IP address xxx.xxx.xxx.xxx, UDP port 31001 will be used automatically")
+    parser.add_option("-s", "--storage", dest="storage", help="Enter a storage IP address xxx.xxx.xxx.xxx, UDP port 31001 will be used automatically OR enter a CMDDEV string, e.g. /dev/sdx")
     parser.add_option("-u", "--user", dest="user", help="Enter the username for the storage system")
     parser.add_option("-p", "--password", dest="password", help="Enter the password for the storage system")
-    parser.add_option("-i", "--horcminstance", dest="horcminstance", help="Enter instance ID")
+    parser.add_option("-i", "--horcminstance", dest="horcminstance", help="Enter HORCM instance ID")
+    parser.add_option("-n", "--udpport", dest="udpport", help="Enter HORCM instance UDP port number, e.g. 44666")
     (options, arguments) = parser.parse_args()
     if not options.storage:
         parser.exit("[-] Please specify a storage system IP address, use --help or -h for more info.")
@@ -107,17 +108,20 @@ def create_vsm_dict(horcm_instance):
     execution_time = end_time - start_time
     logger.info(f"The function took {execution_time} seconds to execute.")
     return vsm_dict
-def create_horcm_file(horcm_instance, path, storage_ip):
+def create_horcm_file(horcm_instance, path, storage_ip, udpport):
         logger.info("Function execution started")
         start_time = time.time()
         horcm_file_full_path = path + "horcm" + horcm_instance + ".conf"
         with open(horcm_file_full_path, 'w') as horcm_file:
                 horcm_file.write("HORCM_MON" + '\n')
                 horcm_file.write("#ip_address" + '\t' + "service" + '\t' + "poll(10ms)" + '\t' + "timeout(10ms)" + '\n')
-                horcm_file.write("localhost" + '\t' + "44666" + '\t' + "1000" + '\t\t' + "3000" + '\n\n\n')
+                horcm_file.write("localhost" + '\t' + udpport + '\t' + "1000" + '\t\t' + "3000" + '\n\n\n')
                 horcm_file.write("HORCM_CMD" + '\n')
                 horcm_file.write("#dev_name" + '\t' + "dev_name" + '\t' + "dev_name)" + '\t' + "dev_name" + '\n')
-                horcm_file.write("\\\\.\\IPCMD-" + storage_ip + "-31001" + '\n')
+                if is_valid_ip(storage_ip):
+                    horcm_file.write("\\\\.\\IPCMD-" + storage_ip + "-31001" + '\n')
+                else:
+                    horcm_file.write(storage_ip  + '\n')
         end_time = time.time()
         execution_time = end_time - start_time
         logger.info(f"The function took {execution_time} seconds to execute.")
@@ -756,12 +760,13 @@ user_input = get_arguments()
 horcm_instance = user_input.horcminstance
 
 storage_ip = user_input.storage
+udpport = user_input.udpport
 if not is_valid_ip(storage_ip):
-    logger.error("Invalid IP address was specified: {storage_ip}")
-    exit()
+    logger.error("Invalid IP address was specified: {storage_ip}, will attempt using the string as CMDDEV")
+    # exit()
 username = user_input.user
 password = user_input.password
-create_horcm_file(horcm_instance, get_home_path(os_type), storage_ip)
+create_horcm_file(horcm_instance, get_home_path(os_type), storage_ip, udpport)
 start_horcm_instance(horcm_instance, get_home_path(os_type), os_type)
 raidcom_login(horcm_instance, username, password)
 file = init_excel_file(horcm_instance)

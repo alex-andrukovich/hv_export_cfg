@@ -20,7 +20,8 @@ Ldevs_unmapped (doesn't work on simulators, therefore ### in the code);\
 Host_groups;\
 \
 \
-Argument Example: -s 10.0.0.118 -u maintenance -p raid-maintenance
-
-
-
+Argument Example: -s 10.0.0.118 -u maintenance -p raid-maintenance -i 999 -n 44666
+\
+\
+add c:\horcm\etc to path before using
+must be admin or have write permissions to C:\HORCM\usr\var for cached credentials to be created (raidcom login process)
