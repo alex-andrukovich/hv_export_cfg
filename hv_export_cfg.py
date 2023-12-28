@@ -9,6 +9,7 @@ import logging
 import traceback
 import time
 import optparse
+import sys
 
 # Create a custom logger
 logger = logging.getLogger("logger")
@@ -33,6 +34,7 @@ def get_arguments():
     parser.add_option("-s", "--storage", dest="storage", help="Enter a storage IP address xxx.xxx.xxx.xxx, UDP port 31001 will be used automatically")
     parser.add_option("-u", "--user", dest="user", help="Enter the username for the storage system")
     parser.add_option("-p", "--password", dest="password", help="Enter the password for the storage system")
+    parser.add_option("-i", "--horcminstance", dest="horcminstance", help="Enter instance ID")
     (options, arguments) = parser.parse_args()
     if not options.storage:
         parser.exit("[-] Please specify a storage system IP address, use --help or -h for more info.")
@@ -42,14 +44,17 @@ def get_arguments():
         parser.exit("[-] Please specify the password to connect the storage system, use --help or -h for more info.")
     return options
 
-def get_home_path():
+def get_home_path(os_type):
     logger.info("Function execution started")
     start_time = time.time()
-    homedrive = os.environ.get('HOMEDRIVE')
-    homepath = os.environ.get('HOMEPATH')
-    full_homepath = homedrive + homepath
-    # logger.info("using " + full_homepath + "as the home path")
-    logger.info("queried for home directory, returned: " + full_homepath + " horcmXXX.conf and Excel files will be created here")
+    if os_type == "win32":
+        homedrive = os.environ.get('HOMEDRIVE')
+        homepath = os.environ.get('HOMEPATH')
+        full_homepath = homedrive + homepath + "\\"
+        logger.info("queried for home directory, returned: " + full_homepath + " horcmXXX.conf and Excel files will be created here")
+    elif os_type == "linux":
+        homepath = os.environ.get('HOME')
+        full_homepath = homepath + "/"
     end_time = time.time()
     execution_time = end_time - start_time
     logger.info(f"The function took {execution_time} seconds to execute.")
@@ -80,7 +85,7 @@ def init_excel_file(horcm_instance):
     # serial = get_system[0].split(":")[1].strip()
     init = get_system + ['\n'] + get_resource + ['\n'] + get_system_opt + ['\n'] + get_system_opt_som
     init_df = pd.DataFrame(init)
-    excel_file_path = get_home_path() + "\\" + serial + "_cfg_export.xlsx"
+    excel_file_path = get_home_path(os_type)  + serial + "_cfg_export.xlsx"
     init_df.to_excel(excel_file_path, header=False, index=False, sheet_name='Summary_' + serial)
     end_time = time.time()
     execution_time = end_time - start_time
@@ -105,7 +110,7 @@ def create_vsm_dict(horcm_instance):
 def create_horcm_file(horcm_instance, path, storage_ip):
         logger.info("Function execution started")
         start_time = time.time()
-        horcm_file_full_path = path + "\\" + "horcm" + horcm_instance + ".conf"
+        horcm_file_full_path = path + "horcm" + horcm_instance + ".conf"
         with open(horcm_file_full_path, 'w') as horcm_file:
                 horcm_file.write("HORCM_MON" + '\n')
                 horcm_file.write("#ip_address" + '\t' + "service" + '\t' + "poll(10ms)" + '\t' + "timeout(10ms)" + '\n')
@@ -117,30 +122,37 @@ def create_horcm_file(horcm_instance, path, storage_ip):
         execution_time = end_time - start_time
         logger.info(f"The function took {execution_time} seconds to execute.")
 
-def shutdown_horcm_instance(horcm_instance, path):
+def shutdown_horcm_instance(horcm_instance, path, os_type):
     logger.info("Function execution started")
     start_time = time.time()
     horcm_file_full_path = path + "\\" + "horcm" + horcm_instance + ".conf"
     os.environ['HORCM_CONF'] = horcm_file_full_path
     os.environ['HORCMINST'] = horcm_instance
     os.environ['HORCM_EVERYCLI'] = "1"
-    subprocess.run(["horcmshutdown"])
+    if os_type == "win32":
+        subprocess.run(["horcmshutdown"])
+    elif os_type == "linux":
+        subprocess.run(["horcmshutdown.sh"])
+
     end_time = time.time()
     execution_time = end_time - start_time
     logger.info(f"The function took {execution_time} seconds to execute.")
 
-def start_horcm_instance(horcm_instance, path):
+def start_horcm_instance(horcm_instance, path, os_type):
         logger.info("Function execution started")
         start_time = time.time()
         try:
-            shutdown_horcm_instance(horcm_instance, path)
+            shutdown_horcm_instance(horcm_instance, path, os_type)
         except:
             logger.info("Could not shutdown HORCM instance, might be down already")
-        horcm_file_full_path = path + "\\" + "horcm" + horcm_instance + ".conf"
+        horcm_file_full_path = path + "horcm" + horcm_instance + ".conf"
         os.environ['HORCM_CONF'] = horcm_file_full_path
         os.environ['HORCMINST'] = horcm_instance
         os.environ['HORCM_EVERYCLI'] = "1"
-        subprocess.run(["horcmstart"])
+        if os_type == "win32":
+            subprocess.run(["horcmstart"])
+        elif os_type == "linux":
+            subprocess.run(["horcmstart.sh"])
         end_time = time.time()
         execution_time = end_time - start_time
         logger.info(f"The function took {execution_time} seconds to execute.")
@@ -180,11 +192,13 @@ def get_ldev_list_mapped(horcm_instance):
         logger.info("Function execution started")
         start_time = time.time()
         array_of_ldevs = []
-        ldevs = subprocess.check_output(
-            ["raidcom", "get", "ldev", "-ldev_list", "mapped", "-fx", "-key", "front_end", "-I" + horcm_instance])
+        ldevs = subprocess.check_output(["raidcom", "get", "ldev", "-ldev_list", "mapped", "-fx", "-key", "front_end", "-I" + horcm_instance])
+        ldevs = ldevs.decode()
+        #ldevs = re.sub(r" \|GAD","|GAD", ldevs)
+        ldevs = ldevs.replace(" |GAD", "|GAD")
         ldevs = ldevs.splitlines()
         for ldev in ldevs:
-            ldev = ldev.decode()
+            #ldev = ldev.decode()
             if not "VOL_TYPE" in ldev:
                 ldev = ldev.split()
                 array_of_ldevs.append(ldev)
@@ -192,7 +206,7 @@ def get_ldev_list_mapped(horcm_instance):
         execution_time = end_time - start_time
         logger.info(f"The function took {execution_time} seconds to execute.")
         return array_of_ldevs
-def get_ldev_list_defailed_by_type(horcm_instance, type):
+def get_ldev_list_defailed_by_type(horcm_instance, type, os_type):
         logger.info("Function execution started")
         start_time = time.time()
         vsm_dict = create_vsm_dict(horcm_instance)
@@ -201,7 +215,10 @@ def get_ldev_list_defailed_by_type(horcm_instance, type):
         ldevs_by_type = subprocess.check_output(
             ["raidcom", "get", "ldev", "-fx", "-ldev_list", type, "-I" + horcm_instance])
         ldevs_by_type = ldevs_by_type.decode()
-        array_ldevs_by_type = ldevs_by_type.split("\r\n\r\n")
+        if os_type == "win32":
+            array_ldevs_by_type = ldevs_by_type.split("\r\n\r\n")
+        elif os_type == "linux":
+            array_ldevs_by_type = ldevs_by_type.split("\n\n")
         array_ldevs_by_type.pop()
         for ldev in array_ldevs_by_type:
             ldev_details_list = ldev.splitlines()
@@ -486,15 +503,15 @@ def output_horcm_text_data(horcm_instance):
         logger.info(f"The function took {execution_time} seconds to execute.")
         return horcm_ldev
 
-def add_horcm_ldev_data_to_horcm(horcm_instance, path):
+def add_horcm_ldev_data_to_horcm(horcm_instance, path, os_type):
     logger.info("Function execution started")
     start_time = time.time()
     local = False
     remote = False
     f = []
     horcm_ldev_data = output_horcm_text_data(horcm_instance)
-    shutdown_horcm_instance(horcm_instance, get_home_path())
-    horcm_file_full_path = path + "\\" + "horcm" + horcm_instance + ".conf"
+    shutdown_horcm_instance(horcm_instance, get_home_path(os_type), os_type)
+    horcm_file_full_path = path + "horcm" + horcm_instance + ".conf"
     with open(horcm_file_full_path, 'a') as horcm_file:
         horcm_file.write('\n' + "HORCM_LDEV" + '\n')
         horcm_file.write("# dev_group" + '\t' + "dev_name" + '\t' + "Serial#" + '\t' + "CU:LDEV(LDEV#)" + '\t' + "MU#" + '\n')
@@ -509,7 +526,7 @@ def add_horcm_ldev_data_to_horcm(horcm_instance, path):
             horcm_file.write("discover_remote" + '\t' + "localhost" + '\t' + "44667" + '\n')
         if local:
             horcm_file.write("discover_local" + '\t' + "localhost" + '\t' + "44667" + '\n')
-    start_horcm_instance(horcm_instance, get_home_path())
+    start_horcm_instance(horcm_instance, get_home_path(os_type), os_type)
     with open(horcm_file_full_path, 'r') as horcm_file:
         horcm_data = horcm_file.read()
     horcm_data = horcm_data.splitlines()
@@ -624,14 +641,17 @@ def get_pool(horcm_instance):
     logger.info(f"The function took {execution_time} seconds to execute.")
     return array_of_pools
 
-def get_quorum(horcm_instance):
+def get_quorum(horcm_instance, os_type):
     logger.info("Function execution started")
     start_time = time.time()
     dict_of_quorum = {}
     dict_of_dict_of_quorum = {}
     try:
         quorum = subprocess.check_output(["raidcom", "get", "quorum", "-fx", "-I" + horcm_instance])
-        quorum = quorum.decode().split('\r\n\r\n')
+        if os_type == "win32":
+            quorum = quorum.decode().split('\r\n\r\n')
+        elif os_type == "linux":
+            quorum = quorum.decode().split('\n\n')
         for line in quorum:
             qline = line.splitlines()
             dict_of_quorum = {}
@@ -643,8 +663,8 @@ def get_quorum(horcm_instance):
                     main_key = value
                 dict_of_quorum[key] = value
             dict_of_dict_of_quorum[main_key] = dict_of_quorum
-    except:
-        logger.error("Could not execute raidcom get quorum")
+    except Exception as e:
+        logger.error(f"Could not execute raidcom get quorum :{e}", exc_info=True)
     end_time = time.time()
     execution_time = end_time - start_time
     logger.info(f"The function took {execution_time} seconds to execute.")
@@ -730,17 +750,19 @@ def is_valid_ip(ip):
     logger.info(f"The function took {execution_time} seconds to execute.")
     return bool(pattern.match(ip))
 
+os_type = sys.platform
 user_input = get_arguments()
 
-horcm_instance = "666"
+horcm_instance = user_input.horcminstance
+
 storage_ip = user_input.storage
 if not is_valid_ip(storage_ip):
     logger.error("Invalid IP address was specified: {storage_ip}")
     exit()
 username = user_input.user
 password = user_input.password
-create_horcm_file(horcm_instance, get_home_path(), storage_ip)
-start_horcm_instance(horcm_instance, get_home_path())
+create_horcm_file(horcm_instance, get_home_path(os_type), storage_ip)
+start_horcm_instance(horcm_instance, get_home_path(os_type), os_type)
 raidcom_login(horcm_instance, username, password)
 file = init_excel_file(horcm_instance)
 ##
@@ -754,14 +776,14 @@ add_sheet_to_excel(get_jnl_mus(horcm_instance), file, "Journal_MUs", False)
 add_sheet_to_excel(get_rcu(horcm_instance), file, "RCUs", False)
 add_sheet_to_excel(get_license(horcm_instance), file, "Licenses", False)
 add_sheet_to_excel(get_pool(horcm_instance), file, "Pools", False)
-add_sheet_to_excel(get_quorum(horcm_instance), file, "Quorum", True)
+add_sheet_to_excel(get_quorum(horcm_instance, os_type), file, "Quorum", True)
 add_sheet_to_excel(get_port(horcm_instance), file, "Ports", True)
-add_sheet_to_excel(add_horcm_ldev_data_to_horcm(horcm_instance, get_home_path()), file, "Horcm", False)
+add_sheet_to_excel(add_horcm_ldev_data_to_horcm(horcm_instance, get_home_path(os_type), os_type), file, "Horcm", False)
 add_sheet_to_excel(discover_replication_remote(horcm_instance), file, "Replication_remote", False)
 add_sheet_to_excel(discover_replication_local(horcm_instance), file, "Replication_local", False)
-add_sheet_to_excel(get_ldev_list_defailed_by_type(horcm_instance, "mapped"), file, "Ldevs_mapped", True)
-add_sheet_to_excel(get_ldev_list_defailed_by_type(horcm_instance, "defined"), file, "Ldevs_defined", True)
-add_sheet_to_excel(get_ldev_list_defailed_by_type(horcm_instance, "unmapped"), file, "Ldevs_unmapped", True)
+add_sheet_to_excel(get_ldev_list_defailed_by_type(horcm_instance, "mapped", os_type), file, "Ldevs_mapped", True)
+add_sheet_to_excel(get_ldev_list_defailed_by_type(horcm_instance, "defined", os_type), file, "Ldevs_defined", True)
+add_sheet_to_excel(get_ldev_list_defailed_by_type(horcm_instance, "unmapped", os_type), file, "Ldevs_unmapped", True)
 ## undefined on simulators = raidcom: [EX_ENOOBJ] No such Object in the RAID ; exit code 1
-##add_sheet_to_excel(get_ldev_list_defailed_by_type(horcm_instance, "undefined"), file, "Ldevs_undefined", True)
+##add_sheet_to_excel(get_ldev_list_defailed_by_type(horcm_instance, "undefined", os_type), file, "Ldevs_undefined", True)
 add_sheet_to_excel(create_host_grp_array_of_arrays(horcm_instance), file, "Host_groups", False)
