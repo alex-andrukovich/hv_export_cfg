@@ -486,7 +486,8 @@ def output_horcm_text_data(horcm_instance):
                         horcm_ldev.append("discover_remote" + '\t' + "discover_remote_" + i[1] + "_h1" + '\t' + i[0] + '\t' + text_ldev + '\t' + "h1")
                         horcm_ldev.append("discover_remote" + '\t' + "discover_remote_" + i[1] + "_h2" + '\t' + i[0] + '\t' + text_ldev + '\t' + "h2")
                         horcm_ldev.append("discover_remote" + '\t' + "discover_remote_" + i[1] + "_h3" + '\t' + i[0] + '\t' + text_ldev + '\t' + "h3")
-                if re.search(r'QS', i[7]) or re.search(r'MRCF', i[7]):
+                # if re.search(r'QS', i[7]) or re.search(r'MRCF', i[7]):
+                if re.search(r'MRCF', i[7]):
                         chars_ldev = [char for char in i[1]]
                         if len(chars_ldev) == 1:
                                 chars_ldev.insert(0, "0")
