@@ -592,14 +592,17 @@ def get_rcu(horcm_instance):
         ["raidcom", "get", "rcu", "-fx", "-I" + horcm_instance])
     get_rcus = get_rcus.decode().splitlines()
     for line in get_rcus[1:]:
-        line = line.split()
-        get_rcu = subprocess.check_output(["raidcom", "get", "rcu", "-fx", "-cu_free", line[0], line[1], line[2], "-I" + horcm_instance])
-        rcu = get_rcu.decode().splitlines()
-        for i in rcu:
-            i = i.splitlines()
-            for j in i:
-                j = j.split()
-                array_of_rcu.append(j[0:12])
+        try:
+            line = line.split()
+            get_rcu = subprocess.check_output(["raidcom", "get", "rcu", "-fx", "-cu_free", line[0], line[1], line[2], "-I" + horcm_instance])
+            rcu = get_rcu.decode().splitlines()
+            for i in rcu:
+                i = i.splitlines()
+                for j in i:
+                    j = j.split()
+                    array_of_rcu.append(j[0:12])
+        except:
+            logger.error("get rcu -cu_free did not work")
     end_time = time.time()
     execution_time = end_time - start_time
     logger.info(f"The function took {execution_time} seconds to execute.")
