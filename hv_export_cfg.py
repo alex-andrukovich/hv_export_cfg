@@ -117,11 +117,14 @@ def create_horcm_file(horcm_instance, path, storage_ip, udpport):
                 horcm_file.write("#ip_address" + '\t' + "service" + '\t' + "poll(10ms)" + '\t' + "timeout(10ms)" + '\n')
                 horcm_file.write("localhost" + '\t' + udpport + '\t' + "1000" + '\t\t' + "3000" + '\n\n\n')
                 horcm_file.write("HORCM_CMD" + '\n')
-                horcm_file.write("#dev_name" + '\t' + "dev_name" + '\t' + "dev_name)" + '\t' + "dev_name" + '\n')
+                horcm_file.write("#dev_name" + '\t' + "dev_name" + '\t' + "dev_name" + '\t' + "dev_name" + '\n')
                 if is_valid_ip(storage_ip):
                     horcm_file.write("\\\\.\\IPCMD-" + storage_ip + "-31001" + '\n')
                 else:
-                    horcm_file.write(storage_ip  + '\n')
+                    if os_type == "win32":
+                        horcm_file.write("\\\\.\\CMD-" + storage_ip  + '\n')
+                    elif os_type == "linux":
+                        horcm_file.write(storage_ip  + '\n')
         end_time = time.time()
         execution_time = end_time - start_time
         logger.info(f"The function took {execution_time} seconds to execute.")
@@ -796,6 +799,3 @@ add_sheet_to_excel(get_ldev_list_defailed_by_type(horcm_instance, "unmapped", os
 ## undefined on simulators = raidcom: [EX_ENOOBJ] No such Object in the RAID ; exit code 1
 ##add_sheet_to_excel(get_ldev_list_defailed_by_type(horcm_instance, "undefined", os_type), file, "Ldevs_undefined", True)
 add_sheet_to_excel(create_host_grp_array_of_arrays(horcm_instance), file, "Host_groups", False)
-
-#test1
-#test2
