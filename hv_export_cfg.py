@@ -799,6 +799,3 @@ add_sheet_to_excel(get_ldev_list_defailed_by_type(horcm_instance, "unmapped", os
 ## undefined on simulators = raidcom: [EX_ENOOBJ] No such Object in the RAID ; exit code 1
 ##add_sheet_to_excel(get_ldev_list_defailed_by_type(horcm_instance, "undefined", os_type), file, "Ldevs_undefined", True)
 add_sheet_to_excel(create_host_grp_array_of_arrays(horcm_instance), file, "Host_groups", False)
-
-#test1
-#test2
