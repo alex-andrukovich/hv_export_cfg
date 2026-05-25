@@ -10,7 +10,10 @@ import traceback
 import time
 import optparse
 import sys
+import openpyxl
 
+
+# Argument Example: -s 192.168.100.103 -u maintenance -p raid-m155 -i 999 -n 44666
 # Create a custom logger
 logger = logging.getLogger("logger")
 # Set the level of this logger. INFO means that it will handle all messages with a level of INFO and above
@@ -174,25 +177,42 @@ def raidcom_login(horcm_instance, username, password):
         execution_time = end_time - start_time
         logger.info(f"The function took {execution_time} seconds to execute.")
 
-def add_sheet_to_excel(data, excel_file_path ,sheet_name, transpose):
+def add_sheet_to_excel(data, excel_file_path, sheet_name, transpose):
     logger.info("Function execution started")
     start_time = time.time()
+
+    # Convert input to DataFrame
     data_df = pd.DataFrame(data)
+
     if transpose:
         data_df = data_df.transpose()
+
     data_df.reset_index(inplace=True, drop=True)
-    if type(data) is list:
+
+    # If data is a list of lists, try to use first row as header
+    if isinstance(data, list):
         try:
             numpy_data = np.array(data)
             data_df = pd.DataFrame(numpy_data[1:], columns=numpy_data[0])
-        except Exception as e:
+        except Exception:
             logger.warning("numpy_data error", exc_info=True)
-    with pd.ExcelWriter(excel_file_path, mode='a') as writer:
-            data_df.to_excel(writer, sheet_name=sheet_name,  freeze_panes=(1, 0), index=False)
-    end_time = time.time()
-    execution_time = end_time - start_time
-    logger.info(f"The function took {execution_time} seconds to execute.")
 
+    # --- FIX: force openpyxl so append works ---
+    with pd.ExcelWriter(
+        excel_file_path,
+        mode='a',
+        engine='openpyxl',
+        if_sheet_exists='replace'   # replace sheet if it already exists
+    ) as writer:
+        data_df.to_excel(
+            writer,
+            sheet_name=sheet_name,
+            freeze_panes=(1, 0),
+            index=False
+        )
+
+    end_time = time.time()
+    logger.info(f"The function took {end_time - start_time} seconds to execute.")
 
 
 def get_ldev_list_mapped(horcm_instance):
@@ -306,13 +326,15 @@ def get_port(horcm_instance):
                     for j, state in enumerate(array_of_port_state_keys):
                         dict_of_port_dict[key][array_of_port_state_keys[j]] = array_of_port_state[j]
         if dict_of_port_dict[key]['TYPE'] == "ISCSI":
-            port_state = subprocess.check_output(
-                ["raidcom", "get", "port", "-fx", "-port", key, "-key", "opt", "-I" + horcm_instance])
+            port_state = subprocess.check_output(["raidcom", "get", "port", "-fx", "-port", key, "-key", "opt", "-I" + horcm_instance])
             for i, port_state in enumerate(port_state.splitlines()):
                 port_state = port_state.decode()
                 array_of_port_state_keys = port_state.split(":")
                 array_of_port_state_values = ''.join(array_of_port_state_keys[1:])
                 dict_of_port_dict[key][array_of_port_state_keys[0]] = array_of_port_state_values
+            port_iqn = subprocess.check_output(["raidcom", "get", "initiator_iscsi_name", "-port", key, "-I" + horcm_instance])
+            port_iqn_initiator_iscsi_name = port_iqn.decode().splitlines()[1].split()[3]
+            dict_of_port_dict[key]["port_iqn_initiator_iscsi_name"] = port_iqn_initiator_iscsi_name
     end_time = time.time()
     execution_time = end_time - start_time
     logger.info(f"The function took {execution_time} seconds to execute.")
