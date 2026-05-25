@@ -25,3 +25,5 @@ Argument Example: -s 10.0.0.118 -u maintenance -p raid-maintenance -i 999 -n 446
 \
 add c:\horcm\etc to path before using
 must be admin or have write permissions to C:\HORCM\usr\var for cached credentials to be created (raidcom login process)
+
+To create an .exe use pyinstaller.exe  --onefile --console .\hv_export_cfg_xxxx.py
